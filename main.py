@@ -4,7 +4,7 @@ load_dotenv()
 import os
 import json
 from openai import OpenAI
-from helper import run_command
+from helper import judge, run_command
 
 client = OpenAI(
     api_key=os.environ.get("gemini_api_key"),
@@ -15,6 +15,10 @@ available_tools = {
     "run_command": {
         "fn": run_command,
         "description": "Takes a command as input to execute on system and returns ouput"
+    },
+    "judge": {
+        "fn": judge,
+        "description" : "Takes user_query and output as input and returns score between 1 to 10"
     }
 }
 
@@ -41,17 +45,25 @@ system_prompt = """
     }}
 
     Available Tools:
-    - run_command: Takes a command as input to execute on system and returns ouput
+    - run_command: Takes a command as input to execute on system and returns output
+    - judge: Takes user_query and output as input and returns score between 1 to 10
+
 
     Examples:
 
     Input: Create a python file and write a program of add two numbers on it.
     Output: {{ "step": "analyze", "content":  "The user is asking to create a Python file with adding two numbers program on it." }}
     Output: {{ "step": "analyze", "content":  "From the available_tools I should call run_command" }}
-    Output: {{ "step": "action",  "function": "run_command", "input": "echo 'def add(a, b): return a + b' > add.py" }}
+    Output: {{ "step": "action",  "function": "run_command", "input": cat > add.py << 'EOF' def add(a, b): return a + b EOF }}
     Output: {{ "step": "observe", "output":   "Add function has written on add.py" }}
-    Output: {{ "step": "output",  "content":  "Everything goes file your file has been successfully created with required code." }}
-    
+    Output: {{ "step": "analyze", "content":  "From the available_tools i should use "judge" function to validate the output" }}
+    Output: {{ "step": "action",  "function": "judge", "input": { 
+                                                            "query": "Create a python file and write a program of add two numbers on it", 
+                                                            "output": "def add(a, b): return a + b"
+                                                        } 
+            }}
+    Output: {{ "step": "observe", "content":  "Judge return score 8 . Everything gone fine proceding to final output" }}
+    Output: {{ "step": "output",  "content":  "Everything goes fine your file has been successfully created with required code." }}
 """
 
 
@@ -89,10 +101,14 @@ while True:
                     messages.append({ "role": "assistant", "content": json.dumps({ "step": "observe", "output":  output}) })
                     continue
             
+            if parsed_res.get("step") == "observe":
+                print(f"👁️: {parsed_res.get("content")}")
+                continue
+
             if parsed_res.get("step") == "output":
                 print(f"🤖: {parsed_res.get("content")}")
                 break
 
         except Exception as e:
-            print("Error occured while generating response", e)
+            print(f"❌: Error occured while generating response {e}")
             break
